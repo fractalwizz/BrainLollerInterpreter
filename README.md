@@ -27,7 +27,9 @@ which gets passed into the Brainfck interpreter to execute
 
 ### TODO
 Cmd parameter for debug information<br>
-Cmd parameter for trace output for each step
+Cmd parameter for trace output for each step<br>
+Convert Brainfck code to image (?)<br>
+Cmd parameter for width of image to convert BF code (?)<br>
 Come up with more TODO items
 
 ### License

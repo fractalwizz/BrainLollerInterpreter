@@ -47,11 +47,11 @@ if (!$file) {
 
 @prog = ($file =~ m/[<>\[\]]/) ? convert($file) : reduce($file);
 
-if ($opt{f}) { outprog($file, \@prog); }
+if ($opt{f}) { outprog($file); }
 
 while ($bail) {
     # termination condition
-    if ($proptr == @prog) { $bail--; next; }
+    if ($proptr >= @prog) { $bail--; next; }
     
     my $char = $prog[$proptr];
     
@@ -99,10 +99,7 @@ sub shiftleft {
  #/
 sub increment {
     $tape[$memptr]++;
-    
-    if ($opt{s}) {
-        if ($tape[$memptr] > 254) { $tape[$memptr] = 0; }
-    }
+    if ($opt{s} && $tape[$memptr] > 254) { $tape[$memptr] = 0; }
 }
 
 ##\
@@ -153,7 +150,7 @@ sub loopstart {
         my $count = 1;
         my $cnt = $proptr;
 
-        for my $i($proptr + 1 .. @prog - 1) {
+        for my $i ($proptr + 1 .. @prog - 1) {
             if ($prog[$i] ~~ '[') { $count++; }
             if ($prog[$i] ~~ ']') { $count--; }
             $cnt++;
@@ -196,17 +193,15 @@ sub loopend {
  # param: $prog: name of program array
  #/
 sub outprog {
-    my ($file, $prog) = @_;
-    if ($file =~ m/[<>\[\]]/) { $file = "cmdout.bf"}
+    my ($file) = @_;
+    if ($file =~ m/[<>\[\]]/) { $file = "cmdout.bf"; }
     
     $file =~ s/(\S+)\..*$/$1/;
-    open(OUT, '>', "$file-flat.bf") or die ("Cannot open $file-flat.bf: $!\n");
+    open (OUT, '>', "$file-flat.bf") or die ("Cannot open $file-flat.bf: $!\n");
     
-    for my $i(@$prog) {
-        print OUT $i;
-    }
+    for my $i (@prog) { print OUT $i; }
     
-    close(OUT);
+    close (OUT);
 }
 
 ##\
@@ -220,8 +215,9 @@ sub reduce {
     my ($file) = @_;
     my @out;
     
-    open(FILE, '<', $file) or die("Can't open $file: $!\n");
+    open (FILE, '<', $file) or die("Can't open $file: $!\n");
     while (<FILE>) { push(@out, convert($_)); }
+    close (FILE);
     
     return @out;
 }
@@ -233,16 +229,16 @@ sub reduce {
  #
  # return: $out: array of program instructions
  #/
- sub convert {
+sub convert {
     my ($file) = @_;
     my @out;
     
     for (0 .. length($file) - 1) {
         my $char = substr($file, 0, 1);
-        $file = substr($file, 1); 
+        $file = substr($file, 1);
             
         if ($char =~ m/[\>\<\+\-\.\,\[\]]/) { push(@out, $char); }
     }
     
     return @out;
- }
+}

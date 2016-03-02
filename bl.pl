@@ -35,8 +35,11 @@ if (!$image) {
     print "  BrainLoller Interpreter written in Perl\n\n";
     print "OPTIONS\n";
     print "OPERANDS\n";
+    print "  imagefile  path to input image file\n\n";
     print "FILES\n";
     print "EXAMPLES\n";
+    print "  $prog ./Examples/cat.png\n";
+    print "  $prog hello.png";
     
     exit(1);
 }
@@ -62,17 +65,14 @@ sanitize();
 while ($bail) {
     $pos = $list[$cy][$cx];
     
-    if (!valid($cy, $cx)) {
-        $bail--;
-        next;
-    }
+    if (!valid($cy, $cx)) { $bail--; next; }
     
     $char = $colors{$pos};
     
     if ($char ~~ "c") {
         direction(1);
     } elsif ($char ~~ "cc") {
-        direction(int("-1"));
+        direction(-1);
     } else {
         if ($colors{$pos}) { $program .= $char; }
     }
@@ -83,7 +83,7 @@ while ($bail) {
 
 #print "Result is : $program\n";
 
-system("perl bf.pl \"$program\"");
+system ("perl bf.pl \"$program\"");
 
 #==================SUBROUTINES==========================
 
@@ -140,6 +140,7 @@ sub sanitize {
  #/
 sub direction {
     my ($val) = @_;
+    
     if ($val < 0) {
         $dpval = ($dpval + $val < 0) ? 3 : $dpval + $val;
     } else {

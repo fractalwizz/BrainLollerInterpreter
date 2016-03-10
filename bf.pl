@@ -3,13 +3,14 @@ use Modern::Perl;
 use Data::Dumper;
 use Getopt::Std;
 use File::Basename;
+no warnings 'experimental::smartmatch';
 
 my @prog;
 my @tape;
 my %opt = ();
 
 # cmd parameters
-getopts('fsl:', \%opt);
+getopts('fsl:d', \%opt);
 
 my $buffer = "";
 my $bail = 1;
@@ -27,6 +28,7 @@ if (!$file) {
     print "  Brainfck Interpreter written in Perl\n\n";
     print "OPTIONS\n";
     print "  -f        Produce Flat version of input program\n";
+    print "  -d        Debug Statistics File Output\n";
     print "  -s        Tape Cell Storage cap at 255 (overflow) (default: unlimited)\n";
     print "  -l [int]  Tape Length (default: unlimited)\n\n";
     print "OPERANDS\n";
@@ -35,25 +37,55 @@ if (!$file) {
     print "  progtext  Literal String of Program Instructions\n\n";
     print "FILES\n";
     print "  Output files (-f,-s,...) written to current directory\n";
-    print "  Flat (-f) filename is textfile-flat.bf\n\n";
+    print "  Flat (-f) filename is textfile-flat.bf\n";
+    print "  DEBUG (-d) filename is textfile-debug.out\n\n";
     print "EXAMPLES\n";
     print "  $prog ./Examples/cat.bf\n";
     print "  $prog -f triangle.bf\n";
     print "  $prog -s -l 20 one.bf\n";
-    print "  $prog \",[.,]\"\n";
+    print "  $prog -d \",[.,]\"\n";
     
     exit(1);
 }
 
+if ($opt{d}) {
+    my $fil = $file;
+    if ($fil =~ m/[<>\[\]]/) { $fil = "cmdout.bf"; }
+    
+    $fil =~ /(\S+)\./;
+    $fil = $1 . "-debug.out";
+    
+    open (DEBUG, '>', $fil) or die ("Can't create $fil: $!\n");
+    print DEBUG "DEBUG enabled\n";
+}
+
 @prog = ($file =~ m/[<>\[\]]/) ? convert($file) : reduce($file);
+if ($opt{d}) { print DEBUG "Program Array Initialized\n"; }
 
 if ($opt{f}) { outprog($file); }
 
 while ($bail) {
+    if ($opt{d}) {
+        print DEBUG "\nproptr: $proptr ";
+        print DEBUG "memptr: $memptr ";
+        print DEBUG "tapeval: ";
+        print DEBUG (defined $tape[$memptr]) ? $tape[$memptr] : "null";
+        print DEBUG "\n";
+    }
+    
     # termination condition
-    if ($proptr >= @prog) { $bail--; next; }
+    if ($proptr >= @prog) { 
+        if ($opt{d}) {
+            print DEBUG "Execution Terminated: EOF\n";
+            close (DEBUG);
+        }
+        
+        $bail--;
+        next;
+    }
     
     my $char = $prog[$proptr];
+    if ($opt{d}) { print DEBUG "char: $char op: "; }
     
     for ($char) {
         when ('>') { shiftright(); }
@@ -79,35 +111,57 @@ while ($bail) {
  # Shifts memptr right
  #/
 sub shiftright {
+    if ($opt{d}) { print DEBUG "memptr-->: $memptr=>"; }
+    
     $memptr++;
     if ($opt{l} && $memptr == $opt{l}) { $memptr = 0; }
+    
+    if ($opt{d}) { print DEBUG "$memptr\n"; }
 }
 
 ##\
  # Shifts memptr left unless at the left end of tape
  #/
 sub shiftleft {
+    if ($opt{d}) { print DEBUG "<--memptr: $memptr=>"; }
+    
     if ($memptr == 0) {
         if ($opt{l}) { $memptr = $opt{l} - 1; }
     } else {
         $memptr--;
     }
+    
+    if ($opt{d}) { print DEBUG "$memptr\n"; }
 }
 
 ##\
  # Increments value of cell at memptr
  #/
 sub increment {
+    if ($opt{d}) {
+        print DEBUG "++ Cell #$memptr: ";
+        if (defined $tape[$memptr]) { print DEBUG "$tape[$memptr]=>"; }
+    }
+    
     $tape[$memptr]++;
-    if ($opt{s} && $tape[$memptr] > 254) { $tape[$memptr] = 0; }
+    if ($opt{s} && $tape[$memptr] > 255) { $tape[$memptr] = 0; }
+    
+    if ($opt{d}) { print DEBUG "$tape[$memptr]\n"; }
 }
 
 ##\
  # Decrements value of cell at memptr
  #/
 sub decrement {
+    if ($opt{d}) {
+        print DEBUG "-- Cell #$memptr: ";
+        if (defined $tape[$memptr]) { print DEBUG "$tape[$memptr]=>"; }
+    }
+    
     $tape[$memptr]--;
-    if ($opt{l} && $tape[$memptr] < 0) { $tape[$memptr] = 254; }
+    if ($opt{s} && $tape[$memptr] < 0) { $tape[$memptr] = 255; }
+    
+    if ($opt{d}) { print DEBUG "$tape[$memptr]\n"; }
 }
 
 ##\
@@ -118,10 +172,14 @@ sub input {
     my $val;
 
     if ($buffer) {
+        if ($opt{d}) { print DEBUG "Buffered Input: "; }
+    
         $val = ord substr($buffer, 0, 1);
         $tape[$memptr] = $val;
         $buffer = substr($buffer, 1);
     } else {
+        if ($opt{d}) { print DEBUG "User Input: "; }
+    
         print "?";
         $val = <>;
 
@@ -135,22 +193,33 @@ sub input {
             $tape[$memptr] = $val;
         }
     }
+    
+    if ($opt{d}) { print DEBUG "$tape[$memptr]\n"; }
 }
 
 ##\
  # Prints ASCII value of cell at memptr
  #/
-sub output { print chr $tape[$memptr]; }
+sub output {
+    if ($opt{d}) { printf DEBUG "Output: %s\n", chr $tape[$memptr]; }
+    print chr $tape[$memptr];
+}
 
 ##\
  # Skip loop to matching right bracket if cell at memptr is zero
  #/
 sub loopstart {
+    if ($opt{d}) { print DEBUG "Loop Start(?): \n"; }
+    
     if (!$tape[$memptr]) {
+        if ($opt{d}) { print DEBUG "Skipping Loop: "; }
+        
         my $count = 1;
         my $cnt = $proptr;
 
         for my $i ($proptr + 1 .. @prog - 1) {
+            if ($opt{d}) { print DEBUG $prog[$i]; }
+            
             if ($prog[$i] ~~ '[') { $count++; }
             if ($prog[$i] ~~ ']') { $count--; }
             $cnt++;
@@ -159,6 +228,8 @@ sub loopstart {
         }
 
         $proptr = $cnt;
+        
+        if ($opt{d}) { print DEBUG "\n"; }
     }
 }
 
@@ -166,11 +237,18 @@ sub loopstart {
  # Backtrack to matching left bracket if cell at memptr is not zero
  #/
 sub loopend {
+    my $gres = "";
+    if ($opt{d}) { print DEBUG "Loop End(?): \n"; }
+
     if ($tape[$memptr]) {
+        if ($opt{d}) { print DEBUG "Back to Start: "; }
+        
         my $count = 1;
         my $cnt = $proptr - 1;
 
         while ($cnt > 0) {
+            if ($opt{d}) { $gres = $prog[$cnt] . $gres; }
+        
             if ($prog[$cnt] ~~ ']') { $count++; }
             if ($prog[$cnt] ~~ '[') { $count--; }
 
@@ -179,6 +257,8 @@ sub loopend {
         }
 
         $proptr = $cnt;
+        
+        if ($opt{d}) { print DEBUG "$gres\n"; }
     }
 }
 
